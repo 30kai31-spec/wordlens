@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordLens — 復習</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Course selection */
+    .course-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .course-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: var(--shadow-sm);
+    }
+    .course-card:hover { border-color: var(--primary-light); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .course-card.active { border-color: var(--primary); background: var(--primary-subtle); }
+    .course-icon { font-size: 2rem; margin-bottom: 10px; }
+    .course-title { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+    .course-desc  { font-size: 0.73rem; color: var(--text-muted); line-height: 1.5; }
+    .course-badge {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    /* Review session screen */
+    #session-screen { display: none; }
+    #select-screen  { display: block; }
+
+    .session-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .session-progress-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    /* Flip card */
+    .review-card-wrapper {
+      perspective: 1200px;
+      margin: 16px 0;
+    }
+    .review-flip-card {
+      width: 100%;
+      min-height: 300px;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(.4,.2,.2,1);
+    }
+    .review-flip-card.flipped { transform: rotateY(180deg); }
+    .review-card-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+    }
+    .review-card-back { transform: rotateY(180deg); }
+
+    .word-display {
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      word-break: break-word;
+    }
+    .front-hint {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .back-article {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .back-word {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    /* Japanese meaning */
+    .back-jp-meaning {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: var(--primary-subtle);
+      border-radius: var(--radius-sm);
+      padding: 6px 16px;
+      margin-bottom: 14px;
+      text-align: center;
+      width: 100%;
+      min-height: 34px;
+    }
+    .back-jp-meaning.empty {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .jp-edit-btn {
+      font-size: 0.72rem;
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .back-context {
+      background: var(--bg);
+      border-left: 3px solid var(--primary-light);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      text-align: left;
+      width: 100%;
+      margin-bottom: 14px;
+    }
+    .back-context .highlight-word {
+      background: #BFDBFE;
+      color: var(--primary-dark);
+      border-radius: 3px;
+      padding: 0 2px;
+      font-weight: 700;
+    }
+    .memo-area {
+      width: 100%;
+      margin-top: 4px;
+    }
+    .memo-display {
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      font-style: italic;
+      text-align: center;
+      min-height: 22px;
+    }
+    .memo-edit-btn {
+      font-size: 0.75rem;
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: 4px;
+    }
+
+    /* Answer buttons */
+    .answer-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .btn-forget {
+      background: #FEF2F2;
+      color: var(--danger);
+      border: 1.5px solid #FECACA;
+      font-weight: 700;
+    }
+    .btn-forget:hover { background: #FEE2E2; }
+    .btn-remember {
+      background: #ECFDF5;
+      color: #059669;
+      border: 1.5px solid #A7F3D0;
+      font-weight: 700;
+    }
+    .btn-remember:hover { background: #D1FAE5; }
+
+    /* Session end */
+    #end-screen { display: none; text-align: center; padding: 40px 0; }
+    .end-icon { font-size: 4rem; margin-bottom: 16px; }
+    .end-title { font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; }
+    .end-sub   { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 24px; }
+    .result-row {
+      display: flex; justify-content: center; gap: 24px; margin-bottom: 28px;
+    }
+    .result-item { text-align: center; }
+    .result-val  { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+    .result-lbl  { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+
+    /* Ebbinghaus info */
+    .ebbinghaus-info {
+      background: var(--primary-subtle);
+      border: 1px solid var(--border-focus);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: var(--primary-dark);
+      line-height: 1.6;
+      margin-top: 4px;
+    }
+    .ebbinghaus-steps {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .ebbinghaus-step {
+      background: var(--primary);
+      color: #fff;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    /* Memo modal inline */
+    #memo-input-area { display: none; width: 100%; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="app-header-inner">
+    <a href="index.html" class="logo">
+      <span class="logo-icon"><i class="fa fa-book-open"></i></span>
+      WordLens
+    </a>
+    <span class="header-title">復習</span>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="app-container">
+
+  <!-- ===== Course Select Screen ===== -->
+  <div id="select-screen">
+    <div class="page-hero">
+      <h1>復習コース</h1>
+      <p>コースを選んで単語の定着を確認しましょう</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" style="margin-bottom:20px;">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-due">—</div>
+        <div class="stat-label">復習予定</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">登録単語数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-mastered2">—</div>
+        <div class="stat-label">習得済み</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-streak">—</div>
+        <div class="stat-label">今日の復習数</div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">コースを選択</span>
+    </div>
+
+    <div class="course-grid">
+      <div class="course-card" onclick="startCourse('due')">
+        <div class="course-icon">🔔</div>
+        <div class="course-title">忘却曲線コース</div>
+        <div class="course-desc">エビングハウスの忘却曲線に基づき、最適なタイミングで単語を復習</div>
+        <span class="course-badge badge badge-blue" id="due-count-badge">— 単語</span>
+      </div>
+      <div class="course-card" onclick="startCourse('random')">
+        <div class="course-icon">🎲</div>
+        <div class="course-title">ランダムコース</div>
+        <div class="course-desc">全単語からランダムで<strong>最大10問</strong>を出題。毎回違う組み合わせで手軽に練習</div>
+        <span class="course-badge badge badge-amber" id="total-count-badge">— 単語</span>
+      </div>
+    </div>
+
+    <!-- Ebbinghaus info -->
+    <div class="section-header" style="margin-top:24px;">
+      <span class="section-title">忘却曲線スケジュール</span>
+    </div>
+    <div class="ebbinghaus-info">
+      <strong>エビングハウスの忘却曲線</strong>に基づき、以下の間隔で復習を設定しています。
+      <div class="ebbinghaus-steps">
+        <span class="ebbinghaus-step">1日後</span>
+        <span class="ebbinghaus-step">3日後</span>
+        <span class="ebbinghaus-step">7日後</span>
+        <span class="ebbinghaus-step">14日後</span>
+        <span class="ebbinghaus-step">30日後</span>
+        <span class="ebbinghaus-step">90日後 ✓</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Session Screen ===== -->
+  <div id="session-screen">
+    <div style="padding-top:20px;">
+      <div class="session-header">
+        <button class="btn btn-ghost btn-sm" onclick="endSession(true)">
+          <i class="fa fa-arrow-left"></i> 中断
+        </button>
+        <span class="session-progress-label">
+          <span id="progress-current">1</span> / <span id="progress-total">—</span>
+        </span>
+        <span class="badge badge-blue" id="session-mode-badge">—</span>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-bar-wrap" style="margin-bottom:16px;">
+        <div class="progress-bar-fill" id="session-progress-bar" style="width:0%"></div>
+      </div>
+
+      <!-- Flip card -->
+      <div class="review-card-wrapper">
+        <div class="review-flip-card" id="flip-card" onclick="flipCard()">
+          <!-- Front -->
+          <div class="review-card-face review-card-front">
+            <div class="word-display" id="card-word">—</div>
+            <div class="front-hint">
+              <i class="fa fa-hand-pointer"></i>
+              タップして意味を確認
+            </div>
+          </div>
+          <!-- Back -->
+          <div class="review-card-face review-card-back">
+            <div class="back-article" id="card-article-title">—</div>
+            <div class="back-word" id="card-back-word">—</div>
+
+            <!-- Japanese meaning -->
+            <div class="back-jp-meaning" id="card-jp-meaning"></div>
+            <button class="jp-edit-btn" onclick="event.stopPropagation();toggleJpEdit()">
+              <i class="fa fa-pencil" style="font-size:0.68rem;"></i> 日本語意味を編集
+            </button>
+            <div id="jp-input-area" style="display:none;width:100%;" onclick="event.stopPropagation()">
+              <input type="text" class="form-input" id="jp-input"
+                placeholder="日本語の意味を入力…"
+                style="font-size:0.88rem;margin-bottom:6px;">
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm btn-primary flex-1" onclick="saveJpMeaning()">保存</button>
+                <button class="btn btn-sm btn-ghost" onclick="toggleJpEdit()">閉じる</button>
+              </div>
+            </div>
+
+            <div class="back-context" id="card-context"></div>
+            <div class="memo-area">
+              <div class="memo-display" id="card-memo"></div>
+              <button class="memo-edit-btn" onclick="event.stopPropagation();toggleMemoEdit()">
+                <i class="fa fa-pencil" style="font-size:0.7rem;"></i>
+                メモを編集
+              </button>
+              <div id="memo-input-area" onclick="event.stopPropagation()">
+                <textarea class="form-textarea" id="memo-input" rows="2"
+                  placeholder="使い方・例文メモを入力…" style="min-height:60px;margin-top:6px;font-size:0.85rem;"></textarea>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <button class="btn btn-sm btn-primary flex-1" onclick="saveMemo()">保存</button>
+                  <button class="btn btn-sm btn-ghost" onclick="toggleMemoEdit()">閉じる</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Answer buttons (shown after flip) -->
+      <div id="answer-buttons" style="display:none;">
+        <p style="text-align:center;font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">
+          この単語を覚えていましたか？
+        </p>
+        <div class="answer-buttons">
+          <button class="btn btn-forget btn-lg" onclick="answerCard(false)">
+            <i class="fa fa-times"></i> 覚えていない
+          </button>
+          <button class="btn btn-remember btn-lg" onclick="answerCard(true)">
+            <i class="fa fa-check"></i> 覚えた！
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== End Screen ===== -->
+  <div id="end-screen">
+    <div class="end-icon" id="end-icon">🎉</div>
+    <div class="end-title" id="end-title">お疲れさまでした！</div>
+    <div class="end-sub"  id="end-sub">復習セッション完了</div>
+    <div class="result-row">
+      <div class="result-item">
+        <div class="result-val" style="color:var(--success);" id="res-remember">—</div>
+        <div class="result-lbl">覚えた</div>
+      </div>
+      <div class="result-item">
+        <div class="result-val" style="color:var(--danger);" id="res-forget">—</div>
+        <div class="result-lbl">要復習</div>
+      </div>
+      <div class="result-item">
+        <div class="result-val" style="color:var(--primary);" id="res-total">—</div>
+        <div class="result-lbl">合計</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-primary btn-lg btn-full" onclick="returnToSelect()">
+        <i class="fa fa-redo"></i> もう一度
+      </button>
+      <a href="vocabulary.html" class="btn btn-secondary btn-lg btn-full">
+        <i class="fa fa-database"></i> 単語帳を確認
+      </a>
+    </div>
+  </div>
+
+</main>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <a href="index.html" class="nav-item" data-href="index.html">
+    <span class="nav-icon">🏠</span><span>ホーム</span>
+  </a>
+  <a href="articles.html" class="nav-item" data-href="articles.html">
+    <span class="nav-icon">📰</span><span>英文</span>
+  </a>
+  <a href="review.html" class="nav-item active" data-href="review.html">
+    <span class="nav-icon">🧠</span><span>復習</span>
+  </a>
+  <a href="vocabulary.html" class="nav-item" data-href="vocabulary.html">
+    <span class="nav-icon">📚</span><span>単語帳</span>
+  </a>
+</nav>
+
+<div id="toast-container"></div>
+
+<script src="js/app.js"></script>
+<script>
+// ---- State ----
+let allWords = [];
+let sessionWords = [];
+let sessionIndex = 0;
+let isFlipped = false;
+let rememberCount = 0;
+let forgetCount = 0;
+let currentMode = '';
+let todayReviewed = 0;
+
+// ---- Load stats ----
+async function loadStats() {
+  try {
+    const res = await API.get('vocabulary', { limit: 500 });
+    allWords = res.data || [];
+
+    const now = Date.now();
+    const dueWords = allWords.filter(w => {
+      if (w.is_mastered) return false;
+      if (!w.next_review_at) return true;
+      return Number(w.next_review_at) <= now;
+    });
+    const mastered = allWords.filter(w => w.is_mastered).length;
+
+    document.getElementById('stat-due').textContent = dueWords.length;
+    document.getElementById('stat-total').textContent = allWords.length;
+    document.getElementById('stat-mastered2').textContent = mastered;
+    document.getElementById('stat-streak').textContent = todayReviewed;
+
+    document.getElementById('due-count-badge').textContent = `${dueWords.length} 単語`;
+    document.getElementById('total-count-badge').textContent = `${allWords.length} 単語`;
+
+    // If URL param mode=due, auto-start
+    const mode = getParam('mode');
+    if (mode === 'due' && dueWords.length > 0) {
+      startCourse('due');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ---- Start session ----
+function startCourse(mode) {
+  const now = Date.now();
+  currentMode = mode;
+
+  if (mode === 'due') {
+    sessionWords = allWords
+      .filter(w => {
+        if (w.is_mastered) return false;
+        if (!w.next_review_at) return true;
+        return Number(w.next_review_at) <= now;
+      })
+      .sort((a, b) => Number(a.next_review_at || 0) - Number(b.next_review_at || 0));
+  } else {
+    // random — shuffle all non-mastered, then cap at 10
+    const RANDOM_LIMIT = 10;
+    const pool = allWords.filter(w => !w.is_mastered);
+    sessionWords = shuffleArray([...pool]).slice(0, RANDOM_LIMIT);
+  }
+
+  if (sessionWords.length === 0) {
+    showToast(mode === 'due'
+      ? '現在復習予定の単語はありません 🎉'
+      : '単語がまだ登録されていません', 'error');
+    return;
+  }
+
+  sessionIndex = 0;
+  rememberCount = 0;
+  forgetCount = 0;
+
+  document.getElementById('select-screen').style.display = 'none';
+  document.getElementById('end-screen').style.display = 'none';
+  document.getElementById('session-screen').style.display = 'block';
+  document.getElementById('session-mode-badge').textContent =
+    mode === 'due' ? '🔔 忘却曲線' : '🎲 ランダム';
+
+  showCard(0);
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ---- Show card ----
+function showCard(idx) {
+  const word = sessionWords[idx];
+  isFlipped = false;
+
+  // Reset flip
+  const flipCard = document.getElementById('flip-card');
+  flipCard.classList.remove('flipped');
+  document.getElementById('answer-buttons').style.display = 'none';
+
+  // Front
+  document.getElementById('card-word').textContent = word.word;
+
+  // Back
+  document.getElementById('card-article-title').textContent =
+    word.article_title ? `📰 ${word.article_title}` : '';
+  document.getElementById('card-back-word').textContent = word.word;
+
+  // Context with highlight
+  const context = word.context || '';
+  const highlighted = context.replace(
+    new RegExp('\\b' + word.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'),
+    m => `<span class="highlight-word">${m}</span>`
+  );
+  document.getElementById('card-context').innerHTML =
+    context ? highlighted : '<span style="color:var(--text-muted);font-style:italic;">コンテキストなし</span>';
+
+  // Japanese meaning
+  const jpEl = document.getElementById('card-jp-meaning');
+  const jp   = word.japanese_meaning || '';
+  if (jp) {
+    jpEl.textContent = jp;
+    jpEl.classList.remove('empty');
+  } else {
+    jpEl.textContent = '（日本語の意味なし — 下の鉛筆アイコンで追加）';
+    jpEl.classList.add('empty');
+  }
+  document.getElementById('jp-input').value = jp;
+  document.getElementById('jp-input-area').style.display = 'none';
+
+  document.getElementById('card-memo').textContent = word.memo || '';
+  document.getElementById('memo-input').value = word.memo || '';
+  document.getElementById('memo-input-area').style.display = 'none';
+
+  // Progress
+  document.getElementById('progress-current').textContent = idx + 1;
+  document.getElementById('progress-total').textContent = sessionWords.length;
+  const pct = (idx / sessionWords.length) * 100;
+  document.getElementById('session-progress-bar').style.width = pct + '%';
+}
+
+// ---- Flip ----
+function flipCard() {
+  if (isFlipped) return;
+  isFlipped = true;
+  document.getElementById('flip-card').classList.add('flipped');
+  setTimeout(() => {
+    document.getElementById('answer-buttons').style.display = 'block';
+  }, 300);
+}
+
+// ---- Answer ----
+async function answerCard(remembered) {
+  const word = sessionWords[sessionIndex];
+  todayReviewed++;
+
+  if (remembered) {
+    rememberCount++;
+    const newCount = (Number(word.review_count) || 0) + 1;
+    const nextReview = getNextReviewTime(newCount);
+    const isMastered = newCount >= REVIEW_INTERVALS.length;
+
+    try {
+      await API.patch('vocabulary', word.id, {
+        review_count: newCount,
+        last_reviewed_at: Date.now(),
+        next_review_at: nextReview,
+        is_mastered: isMastered
+      });
+      if (isMastered) showToast(`「${word.word}」を習得しました！ 🎉`, 'success');
+    } catch (e) { console.error(e); }
+  } else {
+    forgetCount++;
+    try {
+      await API.patch('vocabulary', word.id, {
+        review_count: 0,
+        last_reviewed_at: Date.now(),
+        next_review_at: getNextReviewTime(0), // reset
+        is_mastered: false
+      });
+    } catch (e) { console.error(e); }
+  }
+
+  nextCard();
+}
+
+function nextCard() {
+  sessionIndex++;
+  if (sessionIndex >= sessionWords.length) {
+    endSession(false);
+    return;
+  }
+  showCard(sessionIndex);
+}
+
+// ---- End session ----
+function endSession(aborted) {
+  document.getElementById('session-screen').style.display = 'none';
+  if (aborted) {
+    returnToSelect();
+    return;
+  }
+  document.getElementById('end-screen').style.display = 'block';
+  document.getElementById('res-remember').textContent = rememberCount;
+  document.getElementById('res-forget').textContent = forgetCount;
+  document.getElementById('res-total').textContent = sessionWords.length;
+
+  const rate = sessionWords.length > 0
+    ? Math.round((rememberCount / sessionWords.length) * 100) : 0;
+  document.getElementById('end-icon').textContent =
+    rate >= 80 ? '🎉' : rate >= 50 ? '😊' : '💪';
+  document.getElementById('end-title').textContent =
+    rate >= 80 ? '素晴らしい！' : rate >= 50 ? 'お疲れさまでした！' : 'もう少し頑張ろう！';
+  document.getElementById('end-sub').textContent =
+    `正答率 ${rate}%（${rememberCount}/${sessionWords.length}）`;
+
+  // Update stats
+  document.getElementById('stat-streak').textContent = todayReviewed;
+}
+
+function returnToSelect() {
+  document.getElementById('session-screen').style.display = 'none';
+  document.getElementById('end-screen').style.display = 'none';
+  document.getElementById('select-screen').style.display = 'block';
+  loadStats();
+}
+
+// ---- Japanese meaning edit ----
+function toggleJpEdit() {
+  const area = document.getElementById('jp-input-area');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveJpMeaning() {
+  const word = sessionWords[sessionIndex];
+  const jp   = document.getElementById('jp-input').value.trim();
+  try {
+    await API.patch('vocabulary', word.id, { japanese_meaning: jp });
+    word.japanese_meaning = jp;
+    const jpEl = document.getElementById('card-jp-meaning');
+    if (jp) {
+      jpEl.textContent = jp;
+      jpEl.classList.remove('empty');
+    } else {
+      jpEl.textContent = '(日本語の意味なし — 下の鱛筆アイコンで追加)';
+      jpEl.classList.add('empty');
+    }
+    document.getElementById('jp-input-area').style.display = 'none';
+    showToast('日本語意味を保存しました', 'success');
+  } catch (e) { showToast('保存に失敗しました', 'error'); }
+}
+
+// ---- Memo ----
+function toggleMemoEdit() {
+  const area = document.getElementById('memo-input-area');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveMemo() {
+  const word = sessionWords[sessionIndex];
+  const memo = document.getElementById('memo-input').value.trim();
+  try {
+    await API.patch('vocabulary', word.id, { memo });
+    word.memo = memo;
+    document.getElementById('card-memo').textContent = memo;
+    document.getElementById('memo-input-area').style.display = 'none';
+    showToast('メモを保存しました', 'success');
+  } catch (e) { showToast('保存に失敗しました', 'error'); }
+}
+
+// ---- Init ----
+loadStats();
+</script>
+</body>
+</html>

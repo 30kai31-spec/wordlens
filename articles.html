@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordLens — 英文一覧</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Article cards */
+    .article-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .article-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--border-focus); }
+    .article-card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .article-card-num {
+      width: 28px; height: 28px; background: var(--primary-subtle); border-radius: 8px;
+      display: grid; place-items: center; font-size: 0.78rem; font-weight: 800;
+      color: var(--primary); flex-shrink: 0; margin-top: 1px;
+    }
+    .article-card-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+    .article-card-source { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; padding-left: 38px; }
+    .article-card-preview {
+      font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; padding-left: 38px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .article-card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .article-card-meta { display: flex; align-items: center; gap: 8px; }
+    #article-list { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ======================================
+       Reading view overlay
+       ====================================== */
+    #reading-view {
+      display: none; position: fixed; inset: 0;
+      background: var(--bg); z-index: 150; overflow-y: auto;
+    }
+    #reading-view.open { display: block; }
+
+    .reading-header {
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+      padding: 14px 20px; position: sticky; top: 0; z-index: 10; box-shadow: var(--shadow-sm);
+    }
+    .reading-header-inner {
+      max-width: 800px; margin: 0 auto; display: flex; align-items: center; gap: 12px;
+    }
+    .reading-title {
+      font-size: 0.95rem; font-weight: 700; flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .reading-body { max-width: 800px; margin: 0 auto; padding: 24px 16px 200px; }
+
+    /* Instruction banner */
+    .reading-instruction {
+      background: var(--primary-subtle); border: 1px solid var(--border-focus);
+      border-radius: var(--radius-sm); padding: 10px 14px;
+      font-size: 0.82rem; color: var(--primary-dark); margin-bottom: 16px;
+    }
+    .reading-instruction ul { margin: 6px 0 0 16px; }
+    .reading-instruction li { margin-bottom: 2px; }
+
+    /* Article text */
+    .reading-text {
+      font-size: 1.05rem; line-height: 2.2; color: var(--text-primary);
+      user-select: text; -webkit-user-select: text;
+    }
+
+    /* Word tokens */
+    .word-token {
+      display: inline; cursor: pointer; border-radius: 3px;
+      padding: 0 2px; transition: background var(--transition), color var(--transition);
+    }
+    .word-token:hover { background: #BFDBFE; color: var(--primary-dark); }
+    .word-token.selected { background: var(--primary); color: #fff; border-radius: 4px; font-weight: 600; }
+    .word-token.already-saved { text-decoration: underline dotted var(--primary-light); }
+    /* Span that covers a multi-word selection */
+    .phrase-token {
+      background: var(--primary); color: #fff;
+      border-radius: 4px; font-weight: 600;
+      padding: 0 3px; cursor: pointer;
+    }
+    .phrase-token:hover { background: var(--primary-dark); }
+
+    /* Floating bottom controls */
+    .floating-controls {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--bg-card); border-top: 1px solid var(--border);
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.08); z-index: 160;
+    }
+    .floating-controls-inner { max-width: 800px; margin: 0 auto; }
+    .selected-preview {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      margin-bottom: 8px; min-height: 26px; align-items: center;
+    }
+    .selected-word-chip {
+      background: var(--primary-subtle); color: var(--primary);
+      border-radius: 4px; padding: 2px 8px; font-weight: 600; font-size: 0.78rem;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .chip-remove {
+      cursor: pointer; opacity: 0.6; font-size: 0.7rem;
+      background: none; border: none; color: inherit; padding: 0; line-height: 1;
+    }
+    .chip-remove:hover { opacity: 1; }
+    .floating-actions { display: flex; gap: 8px; }
+
+    /* Highlight popup (appears after text selection) */
+    #selection-popup {
+      display: none; position: fixed;
+      background: #1E293B; color: #fff; border-radius: 10px;
+      padding: 6px 4px; box-shadow: var(--shadow-lg);
+      z-index: 300; white-space: nowrap; font-size: 0.82rem;
+      transform: translateX(-50%);
+    }
+    #selection-popup.visible { display: flex; gap: 2px; }
+    .popup-btn {
+      background: none; border: none; color: #fff; cursor: pointer;
+      padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 600;
+      transition: background 0.15s;
+    }
+    .popup-btn:hover { background: rgba(255,255,255,0.15); }
+    .popup-btn.primary-btn { background: var(--primary); }
+    .popup-btn.primary-btn:hover { background: var(--primary-dark); }
+    #selection-popup::after {
+      content: ''; position: absolute; bottom: -6px; left: 50%;
+      transform: translateX(-50%); border: 6px solid transparent;
+      border-top-color: #1E293B; border-bottom: none; width: 0; height: 0;
+    }
+
+    /* FAB */
+    .fab {
+      position: fixed; bottom: 80px; right: 20px;
+      width: 52px; height: 52px; background: var(--primary); border-radius: 50%;
+      display: grid; place-items: center; color: #fff; font-size: 20px;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.4); border: none; cursor: pointer;
+      transition: all var(--transition); z-index: 50;
+    }
+    .fab:hover { background: var(--primary-dark); transform: scale(1.08); }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="app-header-inner">
+    <a href="index.html" class="logo">
+      <span class="logo-icon"><i class="fa fa-book-open"></i></span>
+      WordLens
+    </a>
+    <span class="header-title">英文一覧</span>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="app-container">
+  <div class="page-hero">
+    <h1>英文一覧 <span id="articles-count" style="font-size:1rem;color:var(--text-muted);font-weight:500;"></span></h1>
+    <p>英字新聞などの英文を追加して、わからない単語をタップ／ドラッグで選択</p>
+  </div>
+
+  <!-- Quick-add banner -->
+  <a href="bookmarklet.html" style="
+    display:flex;align-items:center;gap:12px;
+    background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%);
+    color:#fff;border-radius:var(--radius-md);padding:12px 16px;
+    text-decoration:none;margin-bottom:16px;
+    box-shadow:0 4px 14px rgba(37,99,235,0.28);
+    transition:transform var(--transition),box-shadow var(--transition);"
+    onmouseover="this.style.transform='translateY(-2px)'"
+    onmouseout="this.style.transform=''">
+    <span style="font-size:1.6rem;">📎</span>
+    <div style="flex:1;">
+      <div style="font-weight:700;font-size:0.9rem;">⚡ ワンタップ追加を設定する</div>
+      <div style="font-size:0.75rem;opacity:0.85;margin-top:1px;">iOSショートカットで共有ボタンからワンタップ追加</div>
+    </div>
+    <i class="fa fa-chevron-right" style="opacity:0.7;"></i>
+  </a>
+
+  <div style="margin-bottom:16px;">
+    <input type="text" class="form-input" id="search-input" placeholder="🔍  タイトルや本文で検索…">
+  </div>
+
+  <div id="article-list">
+    <div class="empty-state">
+      <div class="empty-icon">📰</div>
+      <p>まだ英文が登録されていません</p>
+      <button class="btn btn-primary" onclick="openModal('add-article-modal')">
+        <i class="fa fa-plus"></i> 最初の英文を追加
+      </button>
+    </div>
+  </div>
+  <div id="pagination" style="display:flex;gap:8px;justify-content:center;margin-top:16px;"></div>
+</main>
+
+<!-- FAB -->
+<button class="fab" onclick="openModal('add-article-modal')" title="英文を追加">
+  <i class="fa fa-plus"></i>
+</button>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <a href="index.html"    class="nav-item" data-href="index.html"><span class="nav-icon">🏠</span><span>ホーム</span></a>
+  <a href="articles.html" class="nav-item active" data-href="articles.html"><span class="nav-icon">📰</span><span>英文</span></a>
+  <a href="review.html"   class="nav-item" data-href="review.html"><span class="nav-icon">🧠</span><span>復習</span></a>
+  <a href="vocabulary.html" class="nav-item" data-href="vocabulary.html"><span class="nav-icon">📚</span><span>単語帳</span></a>
+</nav>
+
+<!-- ===== Add Article Modal ===== -->
+<div class="modal-backdrop" id="add-article-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">英文を追加</span>
+      <button class="modal-close" onclick="closeModal('add-article-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">タイトル <span style="color:var(--danger)">*</span></label>
+      <input type="text" class="form-input" id="input-title" placeholder="例：BBC News — Climate Summit 2024">
+    </div>
+    <div class="form-group">
+      <label class="form-label">出典</label>
+      <input type="text" class="form-input" id="input-source" placeholder="例：BBC News, The Guardian …">
+    </div>
+    <div class="form-group">
+      <label class="form-label">本文（英文）<span style="color:var(--danger)">*</span></label>
+      <textarea class="form-textarea" id="input-content" rows="8"
+        placeholder="ここに英文をコピー＆ペーストしてください…" style="min-height:140px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('add-article-modal')">キャンセル</button>
+      <button class="btn btn-primary" id="btn-save-article"><i class="fa fa-check"></i> 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Edit Article Modal ===== -->
+<div class="modal-backdrop" id="edit-article-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">英文を編集</span>
+      <button class="modal-close" onclick="closeModal('edit-article-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">タイトル</label>
+      <input type="text" class="form-input" id="edit-title">
+    </div>
+    <div class="form-group">
+      <label class="form-label">出典</label>
+      <input type="text" class="form-input" id="edit-source">
+    </div>
+    <div class="form-group">
+      <label class="form-label">本文</label>
+      <textarea class="form-textarea" id="edit-content" rows="8" style="min-height:140px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="btn-delete-article"><i class="fa fa-trash"></i> 削除</button>
+      <button class="btn btn-ghost" onclick="closeModal('edit-article-modal')">キャンセル</button>
+      <button class="btn btn-primary" id="btn-update-article"><i class="fa fa-check"></i> 更新</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Reading View ===== -->
+<div id="reading-view">
+  <header class="reading-header">
+    <div class="reading-header-inner">
+      <button class="header-back-btn" id="btn-close-reading">
+        <i class="fa fa-arrow-left"></i> 戻る
+      </button>
+      <span class="reading-title" id="reading-title-label">—</span>
+    </div>
+  </header>
+
+  <div class="reading-body">
+    <div class="reading-instruction">
+      <strong><i class="fa fa-hand-pointer" style="color:var(--primary);"></i> 単語選択の方法</strong>
+      <ul>
+        <li>1単語：単語を<strong>タップ</strong></li>
+        <li>熟語・複数単語：テキストを<strong>長押し／ドラッグ</strong>してハイライト → ポップアップの「追加」をタップ</li>
+      </ul>
+    </div>
+    <div class="reading-text" id="reading-text"></div>
+  </div>
+
+  <!-- Selection popup -->
+  <div id="selection-popup">
+    <button class="popup-btn primary-btn" id="popup-add-btn">
+      <i class="fa fa-plus"></i> 追加
+    </button>
+    <button class="popup-btn" id="popup-cancel-btn">キャンセル</button>
+  </div>
+
+  <!-- Floating bottom controls -->
+  <div class="floating-controls">
+    <div class="floating-controls-inner">
+      <div class="selected-preview" id="selected-preview">
+        <span style="font-size:0.78rem;color:var(--text-muted);">単語をタップ、または範囲をドラッグして選択</span>
+      </div>
+      <div class="floating-actions">
+        <button class="btn btn-ghost flex-1" id="btn-clear-selection">
+          <i class="fa fa-times"></i> クリア
+        </button>
+        <button class="btn btn-primary flex-1" id="btn-submit-words">
+          <i class="fa fa-database"></i> 回答（DBへ追加）
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/app.js"></script>
+<script>
+// =============================================
+//  State
+// =============================================
+let articles      = [];
+let currentArticle = null;
+// Map: display-word-string -> { word, context }
+let selectedMap   = new Map();
+let savedWords    = new Set();   // lowercased words already in DB for this article
+let currentPage   = 1;
+const PAGE_SIZE   = 10;
+let totalArticles = 0;
+let searchQuery   = '';
+
+// =============================================
+//  Utility
+// =============================================
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function countWords(text) {
+  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
+// =============================================
+//  Translation (MyMemory free API – no key needed)
+// =============================================
+async function translateToJapanese(text) {
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ja`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    // responseStatus 200 = OK
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      const t = data.responseData.translatedText;
+      // Filter out obvious garbage (same as source, contains "MYMEMORY WARNING", too long)
+      if (t && t !== text && !t.includes('MYMEMORY WARNING') && t.length < 120) {
+        return t;
+      }
+    }
+  } catch (_) {}
+  return '';
+}
+
+// =============================================
+//  Article list
+// =============================================
+async function loadArticles(page = 1, query = '') {
+  currentPage = page;
+  const params = { page, limit: PAGE_SIZE };
+  if (query) params.search = query;
+  try {
+    const res = await API.get('articles', params);
+    articles      = res.data || [];
+    totalArticles = res.total || 0;
+    document.getElementById('articles-count').textContent =
+      totalArticles > 0 ? `(${totalArticles}件)` : '';
+    renderArticleList();
+    renderPagination();
+  } catch (e) {
+    showToast('英文の読み込みに失敗しました', 'error');
+  }
+}
+
+function renderArticleList() {
+  const container = document.getElementById('article-list');
+  if (articles.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📰</div>
+        <p>${searchQuery ? '検索結果がありません' : 'まだ英文が登録されていません'}</p>
+        ${!searchQuery ? `<button class="btn btn-primary" onclick="openModal('add-article-modal')">
+          <i class="fa fa-plus"></i> 最初の英文を追加</button>` : ''}
+      </div>`;
+    return;
+  }
+  container.innerHTML = articles.map((a, i) => `
+    <div class="article-card" onclick="openReadingView('${a.id}')">
+      <div class="article-card-header">
+        <div class="article-card-num">${(currentPage - 1) * PAGE_SIZE + i + 1}</div>
+        <div class="article-card-title">${escapeHtml(a.title)}</div>
+      </div>
+      ${a.source ? `<div class="article-card-source"><i class="fa fa-link" style="font-size:0.7rem;"></i> ${escapeHtml(a.source)}</div>` : ''}
+      <div class="article-card-preview">${escapeHtml(a.content || '')}</div>
+      <div class="article-card-footer">
+        <div class="article-card-meta">
+          <span class="badge badge-blue">${countWords(a.content)} words</span>
+          <span class="badge badge-gray">${formatDate(a.created_at)}</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditModal('${a.id}')">
+          <i class="fa fa-ellipsis-h"></i>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(totalArticles / PAGE_SIZE);
+  const container  = document.getElementById('pagination');
+  if (totalPages <= 1) { container.innerHTML = ''; return; }
+  container.innerHTML = Array.from({ length: totalPages }, (_, i) => i + 1)
+    .map(p => `<button class="btn btn-sm ${p === currentPage ? 'btn-primary' : 'btn-ghost'}"
+      onclick="loadArticles(${p}, searchQuery)">${p}</button>`).join('');
+}
+
+// =============================================
+//  Add / Edit / Delete Articles
+// =============================================
+document.getElementById('btn-save-article').addEventListener('click', async () => {
+  const title   = document.getElementById('input-title').value.trim();
+  const source  = document.getElementById('input-source').value.trim();
+  const content = document.getElementById('input-content').value.trim();
+  if (!title || !content) { showToast('タイトルと本文を入力してください', 'error'); return; }
+  const btn = document.getElementById('btn-save-article');
+  btn.disabled = true;
+  try {
+    await API.post('articles', { title, source, content, added_at: Date.now() });
+    closeModal('add-article-modal');
+    ['input-title','input-source','input-content'].forEach(id => document.getElementById(id).value = '');
+    showToast('英文を追加しました', 'success');
+    loadArticles(1, searchQuery);
+  } catch (e) { showToast('保存に失敗しました', 'error'); }
+  finally { btn.disabled = false; }
+});
+
+let editingArticleId = null;
+function openEditModal(id) {
+  const a = articles.find(x => x.id === id);
+  if (!a) return;
+  editingArticleId = id;
+  document.getElementById('edit-title').value   = a.title   || '';
+  document.getElementById('edit-source').value  = a.source  || '';
+  document.getElementById('edit-content').value = a.content || '';
+  openModal('edit-article-modal');
+}
+document.getElementById('btn-update-article').addEventListener('click', async () => {
+  if (!editingArticleId) return;
+  const title   = document.getElementById('edit-title').value.trim();
+  const source  = document.getElementById('edit-source').value.trim();
+  const content = document.getElementById('edit-content').value.trim();
+  if (!title || !content) { showToast('タイトルと本文は必須です', 'error'); return; }
+  try {
+    await API.patch('articles', editingArticleId, { title, source, content });
+    closeModal('edit-article-modal');
+    showToast('更新しました', 'success');
+    loadArticles(currentPage, searchQuery);
+  } catch (e) { showToast('更新に失敗しました', 'error'); }
+});
+document.getElementById('btn-delete-article').addEventListener('click', async () => {
+  if (!editingArticleId) return;
+  if (!confirm('この英文を削除しますか？')) return;
+  try {
+    await API.delete('articles', editingArticleId);
+    closeModal('edit-article-modal');
+    showToast('削除しました');
+    loadArticles(1, searchQuery);
+  } catch (e) { showToast('削除に失敗しました', 'error'); }
+});
+
+// =============================================
+//  Reading View — open / close
+// =============================================
+async function openReadingView(articleId) {
+  const a = articles.find(x => x.id === articleId);
+  if (!a) return;
+  currentArticle = a;
+  selectedMap    = new Map();
+
+  try {
+    const res = await API.get('vocabulary', { limit: 500 });
+    savedWords = new Set(
+      (res.data || [])
+        .filter(w => w.article_id === articleId)
+        .map(w => w.word.toLowerCase())
+    );
+  } catch (_) { savedWords = new Set(); }
+
+  document.getElementById('reading-title-label').textContent = a.title;
+  renderReadingText(a.content);
+  updateSelectedPreview();
+  document.getElementById('reading-view').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+document.getElementById('btn-close-reading').addEventListener('click', () => {
+  document.getElementById('reading-view').classList.remove('open');
+  document.body.style.overflow = '';
+  hidePopup();
+  currentArticle = null;
+  selectedMap    = new Map();
+});
+
+// =============================================
+//  Tokenize & Render reading text
+// =============================================
+function renderReadingText(text) {
+  const container = document.getElementById('reading-text');
+  const tokens    = tokenizeText(text);   // from app.js
+  container.innerHTML = tokens.map(tok => {
+    if (!tok.isWord) return tok.text.replace(/\n/g, '<br>');
+    const lower = tok.text.toLowerCase().replace(/['']/g, "'");
+    const saved = savedWords.has(lower);
+    return `<span class="word-token${saved ? ' already-saved' : ''}"
+      data-word="${escapeHtml(tok.text)}">${escapeHtml(tok.text)}</span>`;
+  }).join('');
+
+  // Single-word tap
+  container.addEventListener('click', onWordTap);
+  // Drag / selection
+  document.addEventListener('selectionchange', onSelectionChange);
+}
+
+// =============================================
+//  Single-word tap (existing behaviour)
+// =============================================
+function onWordTap(e) {
+  const el = e.target;
+  if (!el.classList.contains('word-token')) return;
+  // If there is a live text selection, ignore tap (handled by popup)
+  if (window.getSelection().toString().trim()) return;
+
+  const word = el.dataset.word;
+  if (!word) return;
+  const key = word; // exact casing as typed
+  if (selectedMap.has(key)) {
+    selectedMap.delete(key);
+    el.classList.remove('selected');
+  } else {
+    const context = getContext(currentArticle.content, word);
+    selectedMap.set(key, { word: key, context });
+    el.classList.add('selected');
+  }
+  updateSelectedPreview();
+}
+
+// =============================================
+//  Drag / text-selection popup
+// =============================================
+let selectionPopupTimer = null;
+
+function onSelectionChange() {
+  clearTimeout(selectionPopupTimer);
+  const sel  = window.getSelection();
+  const text = sel ? sel.toString().trim() : '';
+
+  if (!text || text.split(/\s+/).length < 2) {
+    // Single word or empty — don't show popup (tap handles single words)
+    hidePopup();
+    return;
+  }
+
+  // Only react if selection is inside reading-text
+  if (!sel.rangeCount) { hidePopup(); return; }
+  const range  = sel.getRangeAt(0);
+  const parent = range.commonAncestorContainer;
+  const rt     = document.getElementById('reading-text');
+  if (!rt || !rt.contains(parent) && parent !== rt) { hidePopup(); return; }
+
+  selectionPopupTimer = setTimeout(() => showPopup(sel, text), 200);
+}
+
+function showPopup(sel, text) {
+  if (!sel.rangeCount) return;
+  const range  = sel.getRangeAt(0);
+  const rect   = range.getBoundingClientRect();
+  const popup  = document.getElementById('selection-popup');
+
+  popup.classList.add('visible');
+  const left = rect.left + rect.width / 2;
+  const top  = rect.top - 52 + window.scrollY;   // above selection
+  popup.style.left = `${left}px`;
+  popup.style.top  = `${top}px`;
+
+  // Store the selection text for the add button
+  popup.dataset.pendingText = text;
+}
+
+function hidePopup() {
+  const popup = document.getElementById('selection-popup');
+  popup.classList.remove('visible');
+  popup.dataset.pendingText = '';
+}
+
+document.getElementById('popup-add-btn').addEventListener('click', () => {
+  const popup = document.getElementById('selection-popup');
+  const text  = (popup.dataset.pendingText || '').trim();
+  if (!text) { hidePopup(); return; }
+
+  window.getSelection()?.removeAllRanges();
+  hidePopup();
+  addPhraseToSelection(text);
+});
+
+document.getElementById('popup-cancel-btn').addEventListener('click', () => {
+  window.getSelection()?.removeAllRanges();
+  hidePopup();
+});
+
+// =============================================
+//  Add phrase / idiom to selection map
+// =============================================
+function addPhraseToSelection(phrase) {
+  // Normalise whitespace
+  const normalised = phrase.replace(/\s+/g, ' ').trim();
+  const lower = normalised.toLowerCase();
+
+  if (savedWords.has(lower)) {
+    showToast(`「${normalised}」はすでに登録済みです`);
+    return;
+  }
+  if (selectedMap.has(normalised)) {
+    showToast(`「${normalised}」はすでに選択済みです`);
+    return;
+  }
+  const context = getContext(currentArticle.content, normalised);
+  selectedMap.set(normalised, { word: normalised, context });
+  updateSelectedPreview();
+  showToast(`「${normalised}」を選択しました`);
+}
+
+// =============================================
+//  Selected preview chips
+// =============================================
+function updateSelectedPreview() {
+  const preview = document.getElementById('selected-preview');
+  if (selectedMap.size === 0) {
+    preview.innerHTML = `<span style="font-size:0.78rem;color:var(--text-muted);">単語をタップ、または範囲をドラッグして選択</span>`;
+    return;
+  }
+  preview.innerHTML = [...selectedMap.keys()].map(w => `
+    <span class="selected-word-chip">
+      ${escapeHtml(w)}
+      <button class="chip-remove" onclick="removeFromSelection('${escapeHtml(w).replace(/'/g, "\\'")}')" title="削除">✕</button>
+    </span>`).join('');
+}
+
+function removeFromSelection(word) {
+  selectedMap.delete(word);
+  // Also deselect if it was a single word-token
+  document.querySelectorAll('.word-token.selected').forEach(el => {
+    if (el.dataset.word === word) el.classList.remove('selected');
+  });
+  updateSelectedPreview();
+}
+
+document.getElementById('btn-clear-selection').addEventListener('click', () => {
+  selectedMap = new Map();
+  document.querySelectorAll('.word-token.selected').forEach(el => el.classList.remove('selected'));
+  updateSelectedPreview();
+  hidePopup();
+  window.getSelection()?.removeAllRanges();
+});
+
+// =============================================
+//  Context extraction
+// =============================================
+function getContext(text, word) {
+  const sentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [];
+  const re = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const found = sentences.find(s => re.test(s));
+  return found ? found.trim() : '';
+}
+
+// =============================================
+//  Submit to DB  ← 翻訳APIを呼ぶ
+// =============================================
+document.getElementById('btn-submit-words').addEventListener('click', async () => {
+  if (selectedMap.size === 0) {
+    showToast('単語が選択されていません', 'error'); return;
+  }
+  const btn = document.getElementById('btn-submit-words');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 追加中…';
+
+  let addedCount = 0;
+  let skipCount  = 0;
+
+  for (const [key, entry] of selectedMap) {
+    const lower = key.toLowerCase();
+    if (savedWords.has(lower)) { skipCount++; continue; }
+
+    // Auto-translate
+    btn.innerHTML = `<i class="fa fa-language fa-spin"></i> 翻訳中 (${key})…`;
+    const jpMeaning = await translateToJapanese(key);
+
+    try {
+      await API.post('vocabulary', {
+        word:             key,
+        article_id:       currentArticle.id,
+        article_title:    currentArticle.title,
+        context:          entry.context,
+        japanese_meaning: jpMeaning,
+        memo:             '',
+        review_count:     0,
+        last_reviewed_at: null,
+        next_review_at:   Date.now(),
+        is_mastered:      false
+      });
+      savedWords.add(lower);
+      addedCount++;
+    } catch (e) {
+      console.error('Failed to save word:', key, e);
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa fa-database"></i> 回答（DBへ追加）';
+
+  if (addedCount > 0) {
+    showToast(`${addedCount}件をデータベースに追加しました！`, 'success');
+    selectedMap = new Map();
+    document.querySelectorAll('.word-token.selected').forEach(el => {
+      el.classList.remove('selected');
+      el.classList.add('already-saved');
+    });
+    updateSelectedPreview();
+  }
+  if (skipCount  > 0) showToast(`${skipCount}件はすでに登録済みです`);
+  if (addedCount === 0 && skipCount === 0) showToast('追加に失敗しました', 'error');
+});
+
+// =============================================
+//  Search
+// =============================================
+let searchTimer = null;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchQuery  = e.target.value.trim();
+  searchTimer  = setTimeout(() => loadArticles(1, searchQuery), 400);
+});
+
+// =============================================
+//  Init — ブックマークレットからの自動入力
+// =============================================
+(function checkImportParams() {
+  const params  = new URLSearchParams(location.search);
+  const title   = params.get('wl_title')   || '';
+  const source  = params.get('wl_source')  || '';
+  const content = params.get('wl_content') || '';
+
+  if (!title && !content) return; // 通常アクセス
+
+  // URLパラメータをフォームに流し込んでモーダルを自動オープン
+  // テキストのクリーンアップ（広告などの余分な空行を除去）
+  const cleanedContent = cleanPageText(content);
+
+  document.getElementById('input-title').value   = title;
+  document.getElementById('input-source').value  = source;
+  document.getElementById('input-content').value = cleanedContent;
+
+  // URLパラメータをクリーン（履歴から消す）
+  const cleanUrl = location.pathname;
+  history.replaceState(null, '', cleanUrl);
+
+  // モーダルを開く（少し遅延してDOMが安定してから）
+  setTimeout(() => openModal('add-article-modal'), 300);
+})();
+
+/**
+ * ページ全体の innerText から余分な空白・記号行を除去し
+ * 英文本文らしい部分だけを抽出する簡易クリーナー
+ */
+function cleanPageText(raw) {
+  if (!raw) return '';
+  return raw
+    // 3つ以上続く改行を2つに圧縮
+    .replace(/\n{3,}/g, '\n\n')
+    // 各行を精査：英単語が3語以上含まれる行だけ残す
+    .split('\n')
+    .filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      // 英単語が3語以上 → 英文らしい行
+      const wordCount = (trimmed.match(/[A-Za-z]{2,}/g) || []).length;
+      return wordCount >= 3;
+    })
+    .join('\n')
+    .trim()
+    // 先頭・末尾の空白を除去
+    .slice(0, 6000); // 最大文字数を制限
+}
+
+loadArticles();
+</script>
+</body>
+</html>
